@@ -5,6 +5,7 @@ use Exception;
 
 class TempFile {
 	public readonly string $filename;
+	public bool $persist = false;
 	private $fp;
 	private static function guid() {
 		// Get an RFC-4122 compliant globaly unique identifier
@@ -32,8 +33,11 @@ class TempFile {
 	}
 	public function __destruct() {
 		$old = set_error_handler([static::class, 'error_handler']);
+		fsync($this->fp);
 		fclose($this->fp);
-		unlink($this->filename);
+		if(!$this->persist) {
+			unlink($this->filename);
+		}
 		set_error_handler($old);
 	}
 	public function write(string $data, ?int $length = null): int|false {
@@ -46,10 +50,25 @@ class TempFile {
 		return ftell($this->fp);
 	}
 	public function seek(int $offset, int $whence = SEEK_SET): int {
+		/*
+		Whence: 
+			SEEK_SET - Set position equal to offset bytes.
+			SEEK_CUR - Set position to current location plus offset.
+			SEEK_END - Set position to end-of-file plus offset.
+		*/
 		return fseek($this->fp, $offset, $whence);
 	}
 	public function sync(): bool {
 		return fsync($this->fp);
+	}
+	public function get_lines(int $flags = 0): array|false {
+		/*
+		Flags: FILE_IGNORE_NEW_LINES, FILE_SKIP_EMPTY_LINES
+		*/
+		$old = set_error_handler([static::class, 'error_handler']);
+		$lines = file($this->filename, $flags);
+		set_error_handler($old);
+		return $lines;
 	}
 	public function  get_contents(int $offset = 0, ?int $length = null): string|false {
 		$old = set_error_handler([static::class, 'error_handler']);
@@ -62,6 +81,15 @@ class TempFile {
 		return $content;
 	}
 	public function put_contents(mixed $data, int $flags = 0): int|false {
+		/*
+		Flags: FILE_APPEND, LOCK_EX
+		*/
 		return file_put_contents($this->filename, $data, $flags);
+	}
+	public function size(): int|false {
+		$old = set_error_handler([static::class, 'error_handler']);
+		$size = filesize($this->filename);
+		set_error_handler($old);
+		return $size;
 	}
 }
